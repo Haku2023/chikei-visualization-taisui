@@ -12,16 +12,19 @@ import io
 from dash.exceptions import PreventUpdate
 import plotly.express as px
 
+
 # Get a list of all available color scales
 colorscales = px.colors.named_colorscales()
-layers =['1','2','3','4','5']
-layermapping ={'1':(-98618,45832,75290,219740),'2':(-87008,35842,86090,209750),'3':(-45698,-33998,104720,129920),'4':(-41918,-36638,115250,119330),'5' :(-39808,-38548,116810,117870)}
+layers =['1','2','3','4','5','7']
+# xmin, xmax, ymin, ymax
+layermapping ={'1':(-98618,45832,75290,219740),'2':(-87008,35842,86090,209750),'3':(-45698,-33998,104720,129920),'4':(-41918,-36638,115250,119330),'5' :(-39808,-38548,116810,117870),'7':(-74719,-74620,-205709,-205540)}
 Zmax = 2
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
 server = app.server
 
+# Define layout
 app.layout = html.Div(
     [
         html.H2("Visualization From Chikei Data",style = {"margin":"0%"}),
@@ -101,12 +104,13 @@ app.layout = html.Div(
                      html.Div([
                          html.Div([
                              html.P("Layer_One: ",style = {"marginBottom":"4px","display":"inline-block","margin-right":"140px"}),
-                             html.P("Layer_Two: ",style = {"marginBottom":"4px","display":"inline-block"}),
+                             html.P("Layer_Two: ",style = {"marginBottom":"4px","display":"inline-block","margin-right":"140px"}),
+                             html.P("Y_Ori: ",style = {"marginBottom":"4px","display":"inline-block","margin-right":"140px"})
                          ]),
                          html.Div([
-                              dcc.Dropdown(id='layer-first', options=layers,optionHeight =20, style={"marginLeft":"40px","marginTop":"0",'width':'50px',"display":"inline-block",'font-size':'15px'}),
-                              dcc.Dropdown(id='layer-second', options=layers,optionHeight =20, style={"marginLeft":"105px","marginTop":"0",'width':'50px',"display":"inline-block",'font-size':'15px'})
-
+                              dcc.Dropdown(id='layer-first', options=layers,optionHeight =20, style={"paddingLeft":"70px","marginRight":"170px","marginTop":"0",'width':'50px',"display":"inline-block",'font-size':'15px'}),
+                              dcc.Dropdown(id='layer-second', options=layers,optionHeight =20, style={"marginRight":"150px","marginTop":"0",'width':'50px',"display":"inline-block",'font-size':'15px'}),
+                             dcc.RadioItems(id='Yori-chooser',options=[{'label': 'upward', 'value': 'Y-upward'},{'label': 'downward', 'value': 'Y-downward'}],value='Y-downward',labelStyle={'display': 'block'},style = {"font-size":"20px","margin-top":"0px","paddingTop":"5px","display":"inline-block"}),
                          ])
                          
                                 
@@ -115,25 +119,52 @@ app.layout = html.Div(
                      style = {"marginTop":"0","marginLeft":"30px","display":"inline-block","verticalAlign":"top"})
                 ]
                 ),
-        html.Button(id='Generate',children='Generate',style={'margin':'0','height':'40px','width':'80px','backgroundColor':'#FFFFCC'}),
-
+        html.Div([
+            html.Button(id='Generate',children='Generate',style={'margin':'0','height':'40px','width':'80px','backgroundColor':'#FFFFCC',"display":"inline-block"}),
+            html.P(id='outputmessage1',children='Output-Message-File1',style={"marginLeft":"150px","marginTop":"0",'width':'150px',"display":"inline-block",'font-size':'15px'} ),
+            html.P(id='outputmessage2',children='Output-Message-File2',style={"marginLeft":"150px","marginTop":"0",'width':'150px',"display":"inline-block",'font-size':'15px'} ),
+                ]),
         html.Div(id='graph-container',style={'display': 'flex', 'flexDirection': 'row'})
     ],
     style={'transform': 'scale(1)'}
 )
 
 
-def process_uploaded_file(contents):
+def process_uploaded_file(contents,value):
     # Process the uploaded file and return the data
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
     data = pd.read_csv(io.StringIO(decoded.decode('utf-8')), header=None)
-    data = data.iloc[:, :-1]
-    return data.values
+    deleted_columns = 0
+    deleted_rows = 0
+    while True:
+        last_column = data.iloc[:,-1][0:5]
+        last_row = data.iloc[-1,:][0:5]
+        has_null_values_col = last_column.isnull().any()
+        has_null_values_row = last_row.isnull().any()
+        if has_null_values_col:
+            data = data.iloc[:, :-1]
+            deleted_columns += 1
+        else:
+            data = data.iloc[:,:]
+            if not has_null_values_col and not has_null_values_row:
+                break
+        if has_null_values_row:
+            data = data.iloc[:-1]
+            deleted_rows += 1
+        else:
+            data = data.iloc[:,:]
+            if not has_null_values_col and not has_null_values_row:
+                break
+    outputMessage = f"Deleted {deleted_columns} columns and {deleted_rows} rows."
+    # print(f"Deleted {deleted_columns} columns and {deleted_rows} rows.")
+    if value == 'Y-upward':
+        data = data.iloc[::-1]
+    return data.values,outputMessage
 
 def create_3d_surface(height_grid, x, y, selected_colormap,title):
-    fig = go.Figure(data=[go.Surface(z=height_grid, x=x, y=y, colorscale=selected_colormap,colorbar=dict(orientation='h'))],layout=go.Layout(title=title))
-    fig.update_traces(contours_z=dict(show=True, usecolormap=True, highlightcolor="limegreen", project_z=True))
+    fig = go.Figure(data=[go.Surface(z=height_grid, x=x, y=y, colorscale=selected_colormap,colorbar=dict(orientation='h'),contours=dict(z=dict(show=True, usecolormap=True, highlightcolor="limegreen", project_z=True)))],layout=go.Layout(title=title))
+
     return fig
 
 @app.callback(
@@ -166,8 +197,18 @@ def undate_input(value):
         return 0,0,0,0
 
 @app.callback(
+     Output('graph-container', 'children',allow_duplicate=True),
+     Input('Generate','n_clicks'),
+     prevent_initial_call=True)
+def update_container(click):
+    children = [dcc.Graph(figure=go.Figure())]
+    return children
+
+@app.callback(
     [ Output('graph-container', 'children'),
-      Output('Block-down', 'style')],
+      Output('Block-down', 'style'),
+      Output('outputmessage1', 'children'),
+      Output('outputmessage2', 'children')],
     [Input('Generate','n_clicks'),
      Input('height-slider', 'value'),
      Input('colormap-dropdown', 'value'),
@@ -183,28 +224,34 @@ def undate_input(value):
      State('input-Xmax2', 'value'),
      State('input-Xmin2', 'value'),
      State('input-Ymax2', 'value'),
-     State('input-Ymin2', 'value'),]
+     State('input-Ymin2', 'value'),
+     State('Yori-chooser', 'value'),]
 )
-def update_graph(click,scaling_factor, selected_colormap, file_chooser_value, file_one_contents, file_two_contents,file_one_filename,file_two_filename,xmax1,xmin1,ymax1,ymin1,xmax2,xmin2,ymax2,ymin2):
+def update_graph(click,scaling_factor, selected_colormap, file_chooser_value, file_one_contents, file_two_contents,file_one_filename,file_two_filename,xmax1,xmin1,ymax1,ymin1,xmax2,xmin2,ymax2,ymin2,Yori_chooser_value):
     if file_chooser_value == 'one' and file_one_contents is None:
         style = {'display': 'none'}
         children = [dcc.Graph(figure=go.Figure())]
-        return children, style
+        outputMessage1 = 'Output-Message-File1'
+        outputMessage2 = 'Output-Message-File1'
+        return children, style,outputMessage1,outputMessage2
 
     elif file_chooser_value == 'two' and (file_one_contents is None or file_two_contents is None):
         style = {'display': 'block'}
         children = [dcc.Graph(figure=go.Figure())]
-        return children, style
+        outputMessage1 = 'Output-Message-File1'
+        outputMessage2 = 'Output-Message-File2'
+        return children, style,outputMessage1,outputMessage2
 
     if file_chooser_value == 'one':
-        height_grid_one = process_uploaded_file(file_one_contents)
+        height_grid_one, outputMessage1 = process_uploaded_file(file_one_contents,Yori_chooser_value)
         height_grid_two = np.zeros_like(height_grid_one)  # Create an empty array for the second file
         file_one_name = extract_filename(file_one_filename)
         file_two_name = None
+        outputMessage2 = None
         style = {'display': 'none'}
     else:
-        height_grid_one = process_uploaded_file(file_one_contents)
-        height_grid_two = process_uploaded_file(file_two_contents)
+        height_grid_one, outputMessage1 = process_uploaded_file(file_one_contents,Yori_chooser_value)
+        height_grid_two, outputMessage2 = process_uploaded_file(file_two_contents,Yori_chooser_value)
         # Take the minimum shape to ensure compatibility
         sh_y2, sh_x2 = height_grid_two.shape
         x2, y2 = np.linspace(int(xmin2), int(xmax2), sh_x2), np.linspace(int(ymin2), int(ymax2), sh_y2)
@@ -256,7 +303,7 @@ def update_graph(click,scaling_factor, selected_colormap, file_chooser_value, fi
 
 
 
-    return children,style
+    return children,style,outputMessage1,outputMessage2
 
 def extract_filename(filename):
     filename_netname, filename_type = filename.split('.')
