@@ -197,6 +197,7 @@ app.layout = html.Div(
             ],
             id = 'generate-csv-block'),
         dcc.Loading(id='loading',type='cube',children=html.Div(id='loading-output',style={'font-weight':'bold'})),
+        html.Button(id='Generate-2D',children='Generate-2D',style={'margin':'0','height':'40px','width':'120px','backgroundColor':'#FFE4E1',"display":"block"}),
         html.Div(id='graph-container',style={'display': 'flex', 'flexDirection': 'row'})
     ],
     style={'transform': 'scale(1)'}
@@ -240,6 +241,11 @@ def extract_filename(filename):
 
 def create_3d_surface(height_grid, x, y, selected_colormap,title):
     fig = go.Figure(data=[go.Surface(z=height_grid, x=x, y=y, colorscale=selected_colormap,colorbar=dict(orientation='h'),contours=dict(z=dict(show=True, usecolormap=True, highlightcolor="limegreen", project_z=True)))],layout=go.Layout(title=title))
+
+    return fig
+
+def create_2d_surface(height_grid, x, y, selected_colormap,title):
+    fig = go.Figure(data=[go.Contour(z=height_grid, x=x, y=y, colorscale=selected_colormap,colorbar=dict(orientation='h'))],layout=go.Layout(title=title))
 
     return fig
 
@@ -747,6 +753,73 @@ def update_graph(click,click2,scaling_factor,scaling_factor_water,selected_color
         return_dic['loading']= 'Generate Success' 
         return tuple(return_dic.values())
 
+@app.callback(
+    [ Output('graph-container', 'children',allow_duplicate=True),
+      Output('loading-output', 'children',allow_duplicate=True)],
+    [Input('Generate-2D','n_clicks')],
+    [State('upload-data-one', 'contents'),
+     State('upload-data-two', 'contents'),
+     State('upload-data-one', 'filename'),
+     State('upload-data-two', 'filename'),
+     State('input-Xmax1', 'value'),
+     State('input-Xmin1', 'value'),
+     State('input-Ymax1', 'value'),
+     State('input-Ymin1', 'value'),
+     State('input-Xmax2', 'value'),
+     State('input-Xmin2', 'value'),
+     State('input-Ymax2', 'value'),
+     State('input-Ymin2', 'value'),
+     State('input-dx', 'value'),
+     State('input-dy', 'value'),
+     State('input-dx2', 'value'),
+     State('input-dy2', 'value'),
+     State('Yori-chooser', 'value'),
+     State('file-chooser', 'value'),
+     State('file-format-chooser','value'),
+     State('colormap-dropdown', 'value')],
+prevent_initial_call=True
+)
+def update_graph_2D(click, file_one_contents, file_two_contents,file_one_filename,file_two_filename,xmax1,xmin1,ymax1,ymin1,xmax2,xmin2,ymax2,ymin2,dx,dy,dx2,dy2,Yori_chooser_value,file_chooser_value,file_formate_value, selected_colormap):
+    return_dic = { 'children': None,'loading':None}
+    SuccessText = 'Success!Generation complete'
+    if file_formate_value == '.csv':
+        if file_chooser_value == 'one' and file_one_contents is None:
+            return_dic['children'] = [dcc.Graph(figure=go.Figure())]
+            return_dic['loading'] = 'Please upload the file one'
+            return tuple(return_dic.values())
+
+        elif file_chooser_value == 'two' and (file_one_contents is None or file_two_contents is None):
+            return_dic['children'] = [dcc.Graph(figure=go.Figure())]
+            return_dic['loading'] = 'Please upload the file one and file two'
+            return tuple(return_dic.values())
+        
+        else:
+            height_grid_one, outputMessage1 = process_uploaded_file(file_one_contents,Yori_chooser_value)
+            height_grid_two = np.zeros_like(height_grid_one)  # Create an empty array for the second file
+            file_one_name = extract_filename(file_one_filename)
+            # Create the X, Y coordinates for the grid
+            sh_y1, sh_x1 = height_grid_one.shape
+            x, y = np.linspace(int(xmin1)+dx/2, int(xmax1)-dx/2, sh_x1), np.linspace(int(ymin1)+dy/2, int(ymax1)-dy/2, sh_y1)
+            fig_one = create_2d_surface(height_grid_one, x, y, selected_colormap,file_one_name)
+            fig_one.update_layout(scene=dict(
+                xaxis_title='X-axis',
+                yaxis_title='Y-axis'))
+        if file_chooser_value == 'two':
+            children = [dcc.Graph(figure=fig_one,style={"width":"50%","height":"90vh"})]
+            height_grid_two, outputMessage2 = process_uploaded_file(file_two_contents,Yori_chooser_value)
+            sh_y2, sh_x2 = height_grid_two.shape
+            x2, y2 = np.linspace(int(xmin2)+dx2/2, int(xmax2)-dx2/2, sh_x2), np.linspace(int(ymin2)+dy2/2, int(ymax2)-dy/2, sh_y2)
+            file_two_name = extract_filename(file_two_filename)
+            fig_two = create_2d_surface(height_grid_two, x2, y2, selected_colormap,file_two_name)
+            fig_two.update_layout(scene=dict(
+                xaxis_title='X-axis',
+                yaxis_title='Y-axis'))
+            children.append(dcc.Graph(figure=fig_two,style={"width":"50%","height":"90vh"}))
+        else:
+            children = [dcc.Graph(figure=fig_one,style={"width":"100%","height":"90vh"})]
+        return_dic['children'] = children
+        return_dic['loading'] = SuccessText
+        return tuple(return_dic.values())
     
 if __name__ == "__main__":
     app.run_server(debug=True)
