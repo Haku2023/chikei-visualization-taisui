@@ -36,7 +36,7 @@ styleForoutputMessageDown = {"marginLeft":"150px","marginTop":"0",'width':'700px
 app.layout = html.Div(
     [   dcc.Store(id = 'trace-data'),
      dcc.Store(id = 'trace-data2'),
-        html.H1("Visualization From Chikei Data - 2D ONLY - version2",style = {"margin":"0%"}),
+        html.H1("Visualization From Chikei Data - 2DH & 3D  - Version2+",style = {"margin":"0%"}),
         html.Div(
             [
                 html.Div(
