@@ -17,12 +17,14 @@ import json
 # Get a list of all available color scales
 colorscales = px.colors.named_colorscales()
 layers =['1','2','3','4','5','7']
+advices =['Top View','Hide Coordinates','Change Colorbar Variation']
 # xmin, xmax, ymin, ymax
 layermapping ={'1':(-98618,45832,75290,219740,270,270),'2':(-87008,35842,86090,209750,90,90),'3':(-45698,-33998,104720,129920,30,30),'4':(-41918,-36638,115250,119330,10,10),'5' :(-39808,-38548,116810,117870,5,5),'7':(-74719,-74619,-205709,-205539,1,1)}
 Zmax = 5 # min is 0.1 , step is 0.1
 Zmax2 = 50 # min is 0.1 , step is 0.1
 # Initialize the Dash app
-app = dash.Dash(__name__)
+app = dash.Dash(__name__,suppress_callback_exceptions=True,)
+    
 server = app.server
 
 
@@ -36,7 +38,7 @@ styleForoutputMessageDown = {"marginLeft":"150px","marginTop":"0",'width':'700px
 app.layout = html.Div(
     [   dcc.Store(id = 'trace-data'),
      dcc.Store(id = 'trace-data2'),
-        html.H1("Visualization From Chikei Data - 2DH & 3D  - Version2+",style = {"margin":"0%"}),
+        html.H1("Visualization From Chikei Data - 2DH & 3D  - Version3",style = {"margin":"0%"}),
         html.Div(
             [
                 html.Div(
@@ -76,7 +78,11 @@ app.layout = html.Div(
                                 labelStyle={'display': 'block','background-color':'#CCCCFF','border': '1px solid #636EFA','margin-bottom': '2px'},
                                 style = {"margin-top":"0px","margin-left":"5px"}),
                 html.P("Trim Height= ",style = {"margin-top":"0px","margin-left":"10px"}),
-                dcc.Input(id='Trim Height',type='text',value = None,style = {"margin-top":"0px","margin-left":"10px",'font-size':'20px','width':'60px','text-align':'center'})
+                dcc.Input(id='Trim Height',type='text',value = None,style = {"margin-top":"0px","margin-left":"10px",'font-size':'20px','width':'60px','text-align':'center'}),
+                html.P("Colorbar Max:",style = {"margin-top":"0px","margin-left":"10px"}),
+                dcc.Input(id='Colorbar Max',type='text',value = None,style = {"margin-top":"0px","margin-left":"10px",'font-size':'20px','width':'60px','text-align':'center'}),
+                html.P("Colorbar Min:",style = {"margin-top":"0px","margin-left":"10px"}),
+                dcc.Input(id='Colorbar Min',type='text',value = None,style = {"margin-top":"0px","margin-left":"10px",'font-size':'20px','width':'60px','text-align':'center'}),
 
             ],
             style={'display': 'flex', 'flexDirection': 'row'}
@@ -176,12 +182,15 @@ app.layout = html.Div(
                          html.Div([
                              html.P("Layer_One: ",style = {"marginBottom":"4px","display":"inline-block","margin-right":"140px"}),
                              html.P("Layer_Two: ",style = {"marginBottom":"4px","display":"inline-block","margin-right":"140px"}),
-                             html.P("Y_Ori: ",style = {"marginBottom":"4px","display":"inline-block","margin-right":"140px"})
+                             html.P("Y_Ori: ",style = {"marginBottom":"4px","display":"inline-block","margin-right":"140px"}),
+                             html.P("Nagao_Advice: ",id='nagao_advices_text',style = {"marginBottom":"4px","display":"none","margin-right":"140px"})
                          ]),
                          html.Div([
-                              dcc.Dropdown(id='layer-first', options=layers,optionHeight =20, style={"marginLeft":"40px","marginTop":"0",'width':'50px',"display":"inline-block",'font-size':'15px'}),
-                              dcc.Dropdown(id='layer-second', options=layers,optionHeight =20, style={"marginLeft":"100px","marginRight":"250px","marginTop":"0",'width':'50px',"display":"inline-block",'font-size':'15px'}),
-                              dcc.RadioItems(id='Yori-chooser',options=[{'label': 'upward', 'value': 'Y-upward'},{'label': 'downward', 'value': 'Y-downward'}],value='Y-downward',labelStyle={'display': 'block'},style = {"font-size":"20px","margin-top":"0px","display":"inline-block"}),
+                            html.Div(style={"margin":"0 70px 0 0px","display":"inline-block"}),
+                              dcc.Dropdown(id='layer-first', options=layers,optionHeight =20, style={"padding":"0 0px 0 0px","margin":"0 170px 0 0px" ,'width':'50px',"display":"inline-block",'font-size':'15px'}),
+                              dcc.Dropdown(id='layer-second', options=layers,optionHeight =20, style={"padding":" 0 0 0 0px","margin":"0 140px 0 0",'width':'50px',"display":"inline-block",'font-size':'15px'}),
+                              dcc.RadioItems(id='Yori-chooser',options=[{'label': 'upward', 'value': 'Y-upward'},{'label': 'downward', 'value': 'Y-downward'}],value='Y-downward',labelStyle={'display': 'block'},style = {"font-size":"20px","margin-top":"0px","display":"inline-block","margin-right":"140px"}),
+                              dcc.Dropdown(id='nagao_advices_selection', options=advices,optionHeight =30, disabled=True,style={"padding":" 0 0 0 0px","margin":"0 0 0 0",'width':'180px',"display":"inline-block",'font-size':'15px'}),
                          ])                        
                      ],
                      id = 'layerOriBlock',style = {"marginTop":"0","marginLeft":"30px","display":"block","verticalAlign":"top"})
@@ -481,6 +490,7 @@ def update_configuration(numvalue,value):
         stylegeneratexf = {'display': 'none'}
     return styleLayer,styleupxyzn,styledownxyzn,styleup,styledown,stylegeneratecsv,stylegeneratexf
 
+# callback for generate 3D main
 @app.callback(
     [ Output('graph-container', 'children'),
       Output('outputmessage1', 'children'),
@@ -495,7 +505,9 @@ def update_configuration(numvalue,value):
       Output('Button-two-water', 'style'),
       Output('Button-two-xyzn', 'style'),
       Output('Button-two-f', 'style'),
-      Output('loading-output', 'children')],
+      Output('loading-output', 'children'),
+      Output('nagao_advices_text', 'style'),
+      Output('nagao_advices_selection', 'disabled')],
     [Input('Generate-csv','n_clicks'),
      Input('Generate-xf','n_clicks'),
      Input('height-slider', 'value'),
@@ -541,7 +553,7 @@ prevent_initial_call=True
 )
 def update_graph(click,click2,scaling_factor,scaling_factor_water,selected_colormap,  file_one_contents, file_two_contents,file_one_filename,file_two_filename,filename_xyzn1,filename_xyzn2,filename_water1,filename_water2,file1_water,file1_xyzn,file1_f,file2_water,file2_xyzn,file2_f,trim_value,xmax1,xmin1,ymax1,ymin1,xmax2,xmin2,ymax2,ymin2,dx,dy,dx2,dy2,outputXY,outputXY2,Yori_chooser_value,file_chooser_value,file_formate_value,trace_data_json,trace_data2_json,figure_content):
     return_dic = { 'children': None,'outputMessage1': None,'outputMessage2': None,'outputXY': outputXY,
-'outputXY2': outputXY2,'trace_data_json': None,'trace_data2_json': None,'style-water1':None,'style-xyzn1':None,'style-f1':None,'style-water2':None,'style-xyzn2':None,'style-f2':None,'loading':None}
+'outputXY2': outputXY2,'trace_data_json': None,'trace_data2_json': None,'style-water1':None,'style-xyzn1':None,'style-f1':None,'style-water2':None,'style-xyzn2':None,'style-f2':None,'loading':None,'advices_text':None,'advices_selection':None}
     SuccessText = 'Success!Generation complete'
     # change_id for get the content of the callback trigger
     changed_id = [p['prop_id'] for p in callback_context.triggered][0]
@@ -649,18 +661,21 @@ def update_graph(click,click2,scaling_factor,scaling_factor_water,selected_color
             # Create 3D surface plots for each file
             fig_one = create_3d_surface(height_grid_one, x, y, selected_colormap,file_one_name)
             fig_one.update_layout(scene=dict(
-                xaxis_title='X-axis',
-                yaxis_title='Y-axis',
-                zaxis_title='Height',
+                xaxis=dict(title='X-axis',visible=True),
+                yaxis=dict(title='Y-axis',visible=True),
+                zaxis=dict(title='Height',visible=True),
                 camera=dict(
                     up=dict(x=0, y=0, z=1),
                     center=dict(x=0, y=0, z=0),
                     eye=dict(x=-1.25, y=-2.0, z=1.25),
+                    #eye=dict(x=0, y=0, z=2),
                 ),
                 aspectratio={'x': 1, 'y': 1, 'z': scaling_factor}
                                 ))
             trace_data = {'trace0':{'x':x.tolist(),'y':y.tolist(),'z':height_grid_one.tolist()}}
             trace_data_json = json.dumps(trace_data)
+            return_dic['advices_text'] = {'display': 'inline-block'}
+            return_dic['advices_selection'] = False
 
         if file_chooser_value == 'two':
             children = [dcc.Graph(figure=fig_one,style={"width":"50%","height":"90vh"})]
@@ -686,7 +701,7 @@ def update_graph(click,click2,scaling_factor,scaling_factor_water,selected_color
             trace_data2_json = json.dumps(trace_data2)
             return_dic['trace_data2_json'] =trace_data2_json
         else:
-            children = [dcc.Graph(figure=fig_one,style={"width":"100%","height":"90vh"})]
+            children = [dcc.Graph(id='3d-graph',figure=fig_one,style={"width":"100%","height":"90vh"})]
     ### change the width of graph according to the number of the figures
 
 
@@ -753,6 +768,7 @@ def update_graph(click,click2,scaling_factor,scaling_factor_water,selected_color
         return_dic['loading']= 'Generate Success' 
         return tuple(return_dic.values())
 
+# callback for generate 2D main
 @app.callback(
     [ Output('graph-container', 'children',allow_duplicate=True),
       Output('loading-output', 'children',allow_duplicate=True)],
@@ -820,6 +836,36 @@ def update_graph_2D(click, file_one_contents, file_two_contents,file_one_filenam
         return_dic['children'] = children
         return_dic['loading'] = SuccessText
         return tuple(return_dic.values())
-    
+
+# callback for advices
+@app.callback(
+    Output('3d-graph', 'figure'),
+    [Input('nagao_advices_selection', 'value'),
+    Input('3d-graph', 'figure'),
+    Input('Colorbar Max', 'value'),
+    Input('Colorbar Min', 'value')],
+    prevent_initial_call=True
+)
+def update_figure_from_advies(value,figure,max_value,min_value):
+    if value == "Hide Coordinates":
+        figure['layout']['scene']['xaxis']['visible'] = False
+        figure['layout']['scene']['yaxis']['visible'] = False
+        figure['layout']['scene']['zaxis']['visible'] = False
+        return figure
+    elif value == "Top View":
+        figure['layout']['scene']['camera']['eye']['z'] = 2
+        figure['layout']['scene']['camera']['eye']['y'] = 0
+        figure['layout']['scene']['camera']['eye']['x'] = 0
+        figure['layout']['scene']['camera']['up']['z'] = 0
+        figure['layout']['scene']['camera']['up']['y'] = 1
+        figure['layout']['scene']['camera']['up']['x'] = 0
+        return figure
+    elif value == "Change Colorbar Variation":
+        figure['data'][0]['cmax'] = max_value
+        figure['data'][0]['cmin'] = min_value
+        return figure
+    else:
+        return figure
+
 if __name__ == "__main__":
     app.run_server(debug=True)
