@@ -10,7 +10,8 @@ A Python web application built with Plotly and Dash for visualizing and comparin
   - Top view toggle
   - Coordinate display toggle
   - Layer selection
-- **CSV Export**: Generate visualization data as CSV files
+  - Color scheme selection
+  - 2D/3D mode selection
 
 ## Requirements
 
