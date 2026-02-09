@@ -868,4 +868,5 @@ def update_figure_from_advies(value,figure,max_value,min_value):
         return figure
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run(debug=True)
+
